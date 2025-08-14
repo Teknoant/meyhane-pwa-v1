@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>MEYHANE</title>
+
+  <!-- PWA / iOS -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#0d6efd">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- FullCalendar 6 -->
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/main.min.css" rel="stylesheet" />
+
+  <style>
+    :root{
+      --bg:#f9fafb; --card:#ffffff; --muted:#f1f5f9; --text:#111827; --border:#e5e7eb; --accent:#0d6efd; --event:#e7f1ff;
+      --safe-top: env(safe-area-inset-top); --safe-bottom: env(safe-area-inset-bottom);
+    }
+    html, body { height:100%; }
+    body { background: var(--bg); color: var(--text); padding-top: calc(var(--safe-top,0) + 56px); }
+    @supports (-webkit-touch-callout: none) { body { min-height: -webkit-fill-available; } }
+
+    .navbar { background:#fff; border-bottom:1px solid var(--border); position:fixed; inset:0 0 auto 0; z-index:1000; }
+    .navbar .navbar-brand{ color:var(--text); display:flex; align-items:center; gap:.5rem; }
+    .navbar-brand img{ height:28px; width:auto; display:none; }
+
+    .container-app { padding-bottom: calc(16px + var(--safe-bottom,0)); }
+
+    .card { background:var(--card); border:1px solid var(--border); border-radius:1rem; }
+    .btn-soft{ background:var(--muted); border:1px solid var(--border); color:#111827; }
+    .btn-soft:hover{ background:#e9eef5; }
+    .form-control,.form-select{ background:#fff; color:#111827; border-color:var(--border); }
+    .table thead th{ background:#f3f4f6; }
+
+    /* FullCalendar Türkçe & okunaklılık */
+    .fc .fc-toolbar-title{ color:var(--text); font-size:1.1rem; }
+    .fc .fc-button{ background:#eef2f7; border:1px solid var(--border); color:#111827; }
+    .fc .fc-button-primary:not(:disabled).fc-button-active,
+    .fc .fc-button-primary:not(:disabled):active{ background:var(--accent); color:#fff; border-color:#0d6efd; }
+    .fc .fc-button:hover{ background:#e2e8f0; }
+    .fc .fc-daygrid-event, .fc .fc-timegrid-event, .fc .fc-list-event { background:var(--event); color:#111827; border:1px solid #cfe2ff; }
+    .fc .fc-list-day-cushion { background:#f3f4f6; }
+    .fc .fc-timegrid-slot-label { color:#334155; }
+
+    /* Mobil dokunmatik iyileştirmeleri */
+    @media (max-width: 576px){
+      .fc .fc-toolbar { flex-wrap: wrap; gap:.5rem; }
+      .fc .fc-toolbar-chunk:nth-child(2){ order:-1; width:100%; text-align:center; }
+      .fc .fc-button { padding:.35rem .55rem; }
+      .nav-pills .nav-link{ padding:.5rem .6rem; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">
+        <img id="logoImg" alt="Logo">
+        <span id="appTitle">MEYHANE</span>
+      </a>
+      <div class="d-flex gap-2 ms-auto pe-2">
+        <button id="btnSettings" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#settingsModal">Ayarlar</button>
+        <label class="btn btn-sm btn-outline-secondary mb-0">
+          Veriyi Yükle (JSON)
+          <input id="importJson" type="file" accept="application/json" hidden>
+        </label>
+        <button id="btnExport" class="btn btn-sm btn-outline-secondary">İndir (JSON)</button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container container-app py-3">
+    <ul class="nav nav-pills mb-3" role="tablist">
+      <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-cal" type="button">Takvim</button></li>
+      <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-day" type="button">Günlük Çizelge</button></li>
+      <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-customers" type="button">Müşteriler</button></li>
+      <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-tables" type="button">Masalar</button></li>
+      <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-reports" type="button">Raporlar</button></li>
+    </ul>
+
+    <div class="tab-content">
+      <!-- TAKVİM -->
+      <div class="tab-pane fade show active" id="tab-cal">
+        <div class="row g-3">
+          <div class="col-lg-8">
+            <div class="card p-3">
+              <!-- Masa renk efsanesi KALDIRILDI -->
+              <div id="calendar"></div>
+            </div>
+          </div>
+          <div class="col-lg-4">
+            <div class="card p-3">
+              <h5 class="mb-3">Hızlı Rezervasyon</h5>
+              <form id="rezForm" class="row g-3">
+                <div class="col-6">
+                  <label class="form-label">Tarih</label>
+                  <input type="date" class="form-control" id="rezTarih" required>
+                </div>
+                <div class="col-3">
+                  <label class="form-label">Başlangıç</label>
+                  <input type="time" class="form-control" id="rezSaat" required>
+                </div>
+                <div class="col-3">
+                  <label class="form-label">Bitiş</label>
+                  <input type="time" class="form-control" id="rezBitis">
+                  <div class="form-text">Boşsa varsayılan 120 dk</div>
+                </div>
+                <div class="col-12">
+                  <label class="form-label">Müşteri</label>
+                  <div class="d-flex gap-2">
+                    <select id="rezMusteri" class="form-select flex-grow-1" required></select>
+                    <button type="button" class="btn btn-soft" data-bs-toggle="modal" data-bs-target="#musteriModal">+ Yeni</button>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <label class="form-label">Masa</label>
+                  <select id="rezMasa" class="form-select" required></select>
+                </div>
+                <div class="col-6">
+                  <label class="form-label">Kişi</label>
+                  <input type="number" min="1" class="form-control" id="rezKisi" required>
+                </div>
+                <div class="col-6">
+                  <label class="form-label">Ücret (₺)</label>
+                  <input type="number" min="0" step="0.01" class="form-control" id="rezUcret" placeholder="opsiyonel">
+                </div>
+                <div class="col-6">
+                  <label class="form-label">Not</label>
+                  <input type="text" class="form-control" id="rezNot" placeholder="Örn: doğum günü">
+                </div>
+                <div class="col-12 d-grid">
+                  <button class="btn btn-primary" type="submit">Rezervasyon Ekle</button>
+                </div>
+                <div class="col-12">
+                  <small class="text-secondary">Aynı tarih, aynı masa için <strong>zaman aralığı çakışması</strong> engellenir.</small>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GÜNLÜK ÇİZELGE -->
+      <div class="tab-pane fade" id="tab-day">
+        <div class="card p-3">
+          <div class="d-flex flex-wrap gap-2 align-items-end mb-3">
+            <div>
+              <label class="form-label">Tarih</label>
+              <input type="date" class="form-control" id="gunTarih">
+            </div>
+            <button id="btnGunlukYenile" class="btn btn-soft">Görüntüle</button>
+            <button id="btnGunlukYazdir" class="btn btn-soft">Yazdır / PDF</button>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead>
+                <tr>
+                  <th>Saat</th><th>Masa</th><th>Müşteri</th><th>Kişi</th><th>Ücret</th><th>Not</th><th>İşlem</th>
+                </tr>
+              </thead>
+              <tbody id="gunlukBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- MÜŞTERİLER -->
+      <div class="tab-pane fade" id="tab-customers">
+        <div class="card p-3 mb-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
+          <h5 class="m-0">Müşteriler</h5>
+          <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#musteriModal">+ Yeni Müşteri</button>
+        </div>
+        <div class="card p-3">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead>
+                <tr>
+                  <th>Ad Soyad</th><th>Telefon</th><th>Performans</th><th>Toplam Geliş</th><th>İşlem</th>
+                </tr>
+              </thead>
+              <tbody id="musteriBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- MASALAR -->
+      <div class="tab-pane fade" id="tab-tables">
+        <div class="card p-3 mb-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
+          <h5 class="m-0">Masalar</h5>
+          <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#masaModal">+ Yeni Masa</button>
+        </div>
+        <div class="card p-3">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle">
+              <thead>
+                <tr>
+                  <th>#</th><th>Kapasite</th><th>Konum</th><th>Özellik</th><th>İşlem</th>
+                </tr>
+              </thead>
+              <tbody id="masaBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- RAPORLAR -->
+      <div class="tab-pane fade" id="tab-reports">
+        <div class="row g-3">
+          <div class="col-lg-4">
+            <div class="card p-3">
+              <h5>Özet</h5>
+              <ul class="list-unstyled mb-0">
+                <li class="mb-2">Toplam Müşteri: <span class="badge bg-light text-dark border" id="rTopMusteri">0</span></li>
+                <li class="mb-2">Toplam Masa: <span class="badge bg-light text-dark border" id="rTopMasa">0</span></li>
+                <li class="mb-2">Toplam Rezervasyon: <span class="badge bg-light text-dark border" id="rTopRez">0</span></li>
+                <li class="mb-2">Toplam Gelir: <span class="badge bg-light text-dark border" id="rTopGelir">0 ₺</span></li>
+              </ul>
+            </div>
+          </div>
+          <div class="col-lg-8">
+            <div class="card p-3 mb-3">
+              <h5>En Sık Gelen Müşteriler</h5>
+              <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                  <thead>
+                    <tr><th>#</th><th>Müşteri</th><th>Telefon</th><th>Toplam Rezervasyon</th></tr>
+                  </thead>
+                  <tbody id="raporSik"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="card p-3">
+              <div class="d-flex flex-wrap align-items-end gap-2 mb-3">
+                <div>
+                  <label class="form-label">Hafta Başlangıcı</label>
+                  <input type="date" id="haftaBas" class="form-control">
+                </div>
+                <button id="btnHaftaHesap" class="btn btn-soft">Haftalık Raporu Hesapla</button>
+                <span class="ms-auto">Toplam (₺): <strong id="haftaGelir">0</strong></span>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                  <thead>
+                    <tr><th>Tarih</th><th>Saat</th><th>Masa</th><th>Müşteri</th><th>Kişi</th><th>Ücret</th></tr>
+                  </thead>
+                  <tbody id="haftaBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Ayarlar Modal -->
+  <div class="modal fade" id="settingsModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">Görsel Ayarlar</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+        </div>
+        <form id="settingsForm">
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Uygulama Adı</label>
+              <input type="text" id="setAppName" class="form-control" placeholder="Örn: MEYHANE">
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Logo URL (opsiyonel)</label>
+              <input type="url" id="setLogoUrl" class="form-control" placeholder="https://.../logo.png">
+              <div class="form-text">Boş bırakılırsa logo gizlenir.</div>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="setShowTitle" checked>
+              <label class="form-check-label" for="setShowTitle">Uygulama adını göster</label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-soft" data-bs-dismiss="modal">Kapat</button>
+            <button type="submit" class="btn btn-primary">Kaydet</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Müşteri Modal -->
+  <div class="modal fade" id="musteriModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Müşteri</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <form id="musteriForm">
+          <div class="modal-body">
+            <input type="hidden" id="musteriId">
+            <div class="mb-3"><label class="form-label">Ad Soyad</label><input type="text" class="form-control" id="mAd" required></div>
+            <div class="mb-3"><label class="form-label">Telefon</label><input type="tel" class="form-control" id="mTel" placeholder="05xx xxx xx xx" required></div>
+            <div class="mb-3"><label class="form-label">Performans</label>
+              <select id="mPerf" class="form-select">
+                <option value="Sık Gelen">Sık Gelen</option>
+                <option value="Zamanında">Zamanında</option>
+                <option value="Geciken">Geciken</option>
+                <option value="İptal Eden">İptal Eden</option>
+                <option value="Problemli">Problemli</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-soft" data-bs-dismiss="modal">Kapat</button>
+            <button type="submit" class="btn btn-primary">Kaydet</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Masa Modal -->
+  <div class="modal fade" id="masaModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Masa</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <form id="masaForm">
+          <div class="modal-body">
+            <input type="hidden" id="masaId">
+            <div class="mb-3"><label class="form-label">Masa Numarası</label><input type="number" class="form-control" id="msNo" required></div>
+            <div class="mb-3"><label class="form-label">Kapasite</label><input type="number" class="form-control" id="msKap" value="4" min="1" required></div>
+            <div class="mb-3"><label class="form-label">Konum</label><select id="msKonum" class="form-select"><option>İç Mekan</option><option>Dış Mekan</option></select></div>
+            <div class="mb-3"><label class="form-label">Özellik</label><input type="text" class="form-control" id="msOzel" placeholder="Pencere kenarı, sigara vb."></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-soft" data-bs-dismiss="modal">Kapat</button>
+            <button type="submit" class="btn btn-primary">Kaydet</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rezervasyon Düzenle Modal -->
+  <div class="modal fade" id="rezEditModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header"><h5 class="modal-title">Rezervasyon Düzenle</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <form id="rezEditForm">
+          <div class="modal-body">
+            <input type="hidden" id="rezEditId">
+            <div class="row g-3">
+              <div class="col-6"><label class="form-label">Tarih</label><input type="date" class="form-control" id="rezEditTarih" required></div>
+              <div class="col-3"><label class="form-label">Başlangıç</label><input type="time" class="form-control" id="rezEditSaat" required></div>
+              <div class="col-3"><label class="form-label">Bitiş</label><input type="time" class="form-control" id="rezEditBitis"></div>
+              <div class="col-12"><label class="form-label">Müşteri</label><select id="rezEditMusteri" class="form-select" required></select></div>
+              <div class="col-6"><label class="form-label">Masa</label><select id="rezEditMasa" class="form-select" required></select></div>
+              <div class="col-6"><label class="form-label">Kişi</label><input type="number" min="1" class="form-control" id="rezEditKisi" required></div>
+              <div class="col-6"><label class="form-label">Ücret (₺)</label><input type="number" min="0" step="0.01" class="form-control" id="rezEditUcret"></div>
+              <div class="col-6"><label class="form-label">Not</label><input type="text" class="form-control" id="rezEditNot"></div>
+            </div>
+          </div>
+          <div class="modal-footer d-flex justify-content-between">
+            <button type="button" class="btn btn-danger" id="rezSil">Sil</button>
+            <div>
+              <button type="button" class="btn btn-soft" data-bs-dismiss="modal">Kapat</button>
+              <button type="submit" class="btn btn-primary">Kaydet</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1100">
+    <div id="liveToast" class="toast text-bg-light border" role="alert" aria-live="assertive" aria-atomic="true">
+      <div class="d-flex">
+        <div class="toast-body" id="toastMsg" style="color:#111827">İşlem tamam.</div>
+        <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Kapat"></button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/locales-all.global.min.js"></script>
+  <script>
+    // Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js'));
+    }
+    // Wake Lock (ekran açık tutma)
+    let wakeLock; async function requestWakeLock(){ try{ if('wakeLock' in navigator){ wakeLock = await navigator.wakeLock.request('screen'); document.addEventListener('visibilitychange', async ()=>{ if(document.visibilityState==='visible'){ wakeLock = await navigator.wakeLock.request('screen'); } }); } }catch(e){} } requestWakeLock();
+
+    // ------------------- Depo -------------------
+    const store = { key:'meyhane-pwa-full', data:{ settings:{ appName:'MEYHANE', logoUrl:'', showTitle:true }, customers:[], tables:[], reservations:[] },
+      load(){ const raw=localStorage.getItem(this.key); if(raw){ try{ this.data=JSON.parse(raw);}catch(e){} }
+        if(!this.data.tables || this.data.tables.length===0){ this.data.tables = Array.from({length:30},(_,i)=>({ id:crypto.randomUUID(), no:i+1, capacity:4, location:i<15?'İç Mekan':'Dış Mekan', feature:'' })); this.save(); }
+      },
+      save(){ localStorage.setItem(this.key, JSON.stringify(this.data)); },
+      export(){ const json=JSON.stringify({customers:this.data.customers,tables:this.data.tables,reservations:this.data.reservations},null,2); const blob=new Blob([json],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='rezervasyon-veri.json'; a.click(); URL.revokeObjectURL(url); },
+      import(file){ const reader=new FileReader(); reader.onload=()=>{ try{ const p=JSON.parse(reader.result); if(p&&p.customers&&p.tables&&p.reservations){ this.data.customers=p.customers; this.data.tables=p.tables; this.data.reservations=p.reservations; this.save(); location.reload(); } else alert('Geçersiz JSON'); }catch(e){ alert('JSON okunamadı'); } }; reader.readAsText(file);} };
+
+    // ------------------- Yardımcılar -------------------
+    const showToast=(m)=>{ document.getElementById('toastMsg').textContent=m; new bootstrap.Toast(document.getElementById('liveToast')).show(); };
+    const fmtDate=(d)=> new Date(d).toISOString().slice(0,10); const today=fmtDate(new Date());
+    const toMin=(s)=>{ const [h,m]=s.split(':').map(Number); return h*60+m;}; const pad2=(n)=>String(n).padStart(2,'0'); const minToHHMM=(x)=>`${pad2(Math.floor(x/60))}:${pad2(x%60)}`;
+    const overlap=(aS,aE,bS,bE)=> (aS<bE)&&(aE>bS);
+    const conflict=({id,date,start,end,tableId})=>{ const s=toMin(start), e=toMin(end); return store.data.reservations.some(r=>{ if(r.tableId!==tableId||r.date!==date||r.id===id) return false; const rs=toMin(r.time), re=toMin(r.end||r.time); return overlap(s,e,rs,re); }); };
+
+    function findCustomer(id){ return store.data.customers.find(c=>c.id===id);} function findTable(id){ return store.data.tables.find(t=>t.id===id);} function findReservation(id){ return store.data.reservations.find(r=>r.id===id);}    
+
+    // ------------------- Branding -------------------
+    function applyBranding(){ const title=document.getElementById('appTitle'); const logo=document.getElementById('logoImg'); const {appName,logoUrl,showTitle}=store.data.settings||{}; title.textContent=appName||''; title.style.display=(showTitle&&appName)?'':'none'; if(logoUrl){ logo.src=logoUrl; logo.style.display='inline-block'; } else { logo.removeAttribute('src'); logo.style.display='none'; } }
+
+    // ------------------- Müşteri UI -------------------
+    function renderCustomers(){ const body=document.getElementById('musteriBody'); if(!body) return; body.innerHTML=''; const counts={}; for(const r of store.data.reservations){ counts[r.customerId]=(counts[r.customerId]||0)+1; } for(const c of store.data.customers){ const tr=document.createElement('tr'); tr.innerHTML=`<td>${c.name}</td><td><a class='link' href='tel:${c.phone}'>${c.phone}</a></td><td><span class='badge bg-light border text-dark'>${c.performance||''}</span></td><td>${counts[c.id]||0}</td><td><button class='btn btn-sm btn-soft me-2' onclick=\"editCustomer('${c.id}')\">Düzenle</button><button class='btn btn-sm btn-danger' onclick=\"delCustomer('${c.id}')\">Sil</button></td>`; body.appendChild(tr);} fillCustomerSelects(); }
+    function fillCustomerSelects(){ const sels=[document.getElementById('rezMusteri'),document.getElementById('rezEditMusteri')]; for(const sel of sels){ if(!sel) continue; sel.innerHTML='<option value="" disabled selected>Seçiniz</option>'; } store.data.customers.forEach(c=>{ const opt=new Option(`${c.name} (${c.phone})`,c.id); const opt2=opt.cloneNode(true); if(sels[0]) sels[0].add(opt); if(sels[1]) sels[1].add(opt2); }); }
+    function editCustomer(id){ const c=findCustomer(id); if(!c) return; document.getElementById('musteriId').value=c.id; document.getElementById('mAd').value=c.name; document.getElementById('mTel').value=c.phone; document.getElementById('mPerf').value=c.performance||'Zamanında'; new bootstrap.Modal('#musteriModal').show(); }
+    function delCustomer(id){ if(!confirm('Müşteri silinsin mi?
+Not: Bu müşteriye ait rezervasyonlar silinmez.')) return; store.data.customers=store.data.customers.filter(c=>c.id!==id); store.save(); renderCustomers(); renderReports(); showToast('Müşteri silindi.'); }
+
+    // ------------------- Masa UI -------------------
+    function renderTables(){ const body=document.getElementById('masaBody'); if(!body) return; body.innerHTML=''; store.data.tables.sort((a,b)=>a.no-b.no).forEach(t=>{ const tr=document.createElement('tr'); tr.innerHTML=`<td>${t.no}</td><td>${t.capacity}</td><td>${t.location}</td><td>${t.feature||''}</td><td><button class='btn btn-sm btn-soft me-2' onclick=\"editTable('${t.id}')\">Düzenle</button><button class='btn btn-sm btn-danger' onclick=\"delTable('${t.id}')\">Sil</button></td>`; body.appendChild(tr); }); fillTableSelects(); }
+    function fillTableSelects(){ const sels=[document.getElementById('rezMasa'),document.getElementById('rezEditMasa')]; for(const sel of sels){ if(!sel) continue; sel.innerHTML='<option value="" disabled selected>Seçiniz</option>'; } store.data.tables.sort((a,b)=>a.no-b.no).forEach(t=>{ const opt=new Option(`Masa ${t.no} (${t.location}, ${t.capacity} kişilik)`,t.id); const opt2=opt.cloneNode(true); if(sels[0]) sels[0].add(opt); if(sels[1]) sels[1].add(opt2); }); }
+    function editTable(id){ const t=findTable(id); if(!t) return; document.getElementById('masaId').value=t.id; document.getElementById('msNo').value=t.no; document.getElementById('msKap').value=t.capacity; document.getElementById('msKonum').value=t.location; document.getElementById('msOzel').value=t.feature||''; new bootstrap.Modal('#masaModal').show(); }
+    function delTable(id){ if(!confirm('Bu masa silinsin mi?')) return; store.data.tables=store.data.tables.filter(t=>t.id!==id); store.save(); renderTables(); showToast('Masa silindi.'); }
+
+    // ------------------- Takvim / Rezervasyon -------------------
+    let calendar; 
+    function reservationEvent(r){ const c=findCustomer(r.customerId); const t=findTable(r.tableId); return { id:r.id, title:`${c?c.name:'Müşteri'} — Masa ${t?t.no:'?'} (${r.party})`, start:`${r.date}T${r.time}`, end:`${r.date}T${r.end||r.time}` }; }
+    function buildCalendar(){ const el=document.getElementById('calendar'); if(calendar){ calendar.destroy(); }
+      const isPhone=window.matchMedia('(max-width: 576px)').matches; const isTablet=window.matchMedia('(max-width: 992px)').matches && !isPhone;
+      const initialView = isPhone ? 'listDay' : (isTablet ? 'timeGridDay' : 'timeGridWeek');
+      const headerRight = isPhone ? 'listDay,listWeek,dayGridMonth' : 'timeGridDay,timeGridWeek,dayGridMonth,listWeek';
+      calendar=new FullCalendar.Calendar(el,{ locale:'tr', firstDay:1, initialView, aspectRatio:isPhone?0.95:1.35, stickyHeaderDates:true, nowIndicator:true, slotMinTime:'12:00:00', slotMaxTime:'02:00:00', slotDuration:'00:30:00', scrollTime:'18:00:00', headerToolbar:{ left:'prev,next today', center:'title', right: headerRight }, buttonText:{ today:'Bugün', month:'Ay', week:'Hafta', day:'Gün', list:'Liste' }, slotLabelFormat:{ hour:'2-digit', minute:'2-digit', hour12:false }, events: store.data.reservations.map(reservationEvent), eventTimeFormat:{ hour:'2-digit', minute:'2-digit', hour12:false }, eventClick:(info)=>{ const r=findReservation(info.event.id); if(r) openRezEdit(r); }, dateClick:(info)=>{ document.getElementById('rezTarih').value=info.dateStr; } });
+      calendar.render(); }
+    function openRezEdit(r){ document.getElementById('rezEditId').value=r.id; document.getElementById('rezEditTarih').value=r.date; document.getElementById('rezEditSaat').value=r.time; document.getElementById('rezEditBitis').value=r.end||''; document.getElementById('rezEditKisi').value=r.party; document.getElementById('rezEditUcret').value=r.price||''; document.getElementById('rezEditNot').value=r.note||''; fillCustomerSelects(); fillTableSelects(); document.getElementById('rezEditMusteri').value=r.customerId; document.getElementById('rezEditMasa').value=r.tableId; new bootstrap.Modal('#rezEditModal').show(); }
+    function renderDaily(){ const d=document.getElementById('gunTarih').value||today; const body=document.getElementById('gunlukBody'); if(!body) return; body.innerHTML=''; const items=store.data.reservations.filter(r=>r.date===d).sort((a,b)=>a.time.localeCompare(b.time)); for(const r of items){ const c=findCustomer(r.customerId); const t=findTable(r.tableId); const tr=document.createElement('tr'); tr.innerHTML=`<td>${r.time} - ${r.end||''}</td><td>${t? 'Masa '+t.no:'?'}</td><td>${c?c.name:''}</td><td>${r.party}</td><td>${r.price? Number(r.price).toFixed(2): '-'}</td><td>${r.note||''}</td><td><button class='btn btn-sm btn-soft' onclick=\"openRezEdit(findReservation('${r.id}'))\">Düzenle</button></td>`; body.appendChild(tr);} }
+
+    // ------------------- Raporlar -------------------
+    function renderReports(){ document.getElementById('rTopMusteri').textContent=store.data.customers.length; document.getElementById('rTopMasa').textContent=store.data.tables.length; document.getElementById('rTopRez').textContent=store.data.reservations.length; const gelir=store.data.reservations.reduce((s,r)=> s+Number(r.price||0),0); document.getElementById('rTopGelir').textContent=gelir.toFixed(2)+' ₺'; const counts={}; for(const r of store.data.reservations){ counts[r.customerId]=(counts[r.customerId]||0)+1; } const arr=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,10); const body=document.getElementById('raporSik'); body.innerHTML=''; let rank=1; for(const [cid,cnt] of arr){ const c=findCustomer(cid); const tr=document.createElement('tr'); tr.innerHTML=`<td>${rank++}</td><td>${c?c.name:''}</td><td>${c?c.phone:''}</td><td>${cnt}</td>`; body.appendChild(tr);} }
+    function sumWeekly(startDate){ const s=new Date(startDate); const e=new Date(startDate); e.setDate(e.getDate()+6); const inRange=(d)=>{ const x=new Date(d); x.setHours(0,0,0,0); return x>=s && x<=e; }; const rows=store.data.reservations.filter(r=> inRange(r.date)).sort((a,b)=> (a.date+a.time).localeCompare(b.date+b.time)); let total=0; const tbody=document.getElementById('haftaBody'); tbody.innerHTML=''; for(const r of rows){ const c=findCustomer(r.customerId); const t=findTable(r.tableId); const price=Number(r.price||0); total+=price; const tr=document.createElement('tr'); tr.innerHTML=`<td>${r.date}</td><td>${r.time} - ${r.end||''}</td><td>${t? 'Masa '+t.no:'?'}</td><td>${c? c.name:''}</td><td>${r.party}</td><td>${price.toFixed(2)}</td>`; tbody.appendChild(tr);} document.getElementById('haftaGelir').textContent=total.toFixed(2); }
+
+    // ------------------- Olaylar -------------------
+    window.addEventListener('DOMContentLoaded', ()=>{
+      store.load();
+      document.getElementById('rezTarih').value=today; document.getElementById('gunTarih').value=today; document.getElementById('haftaBas').value=today;
+      applyBranding(); renderTables(); renderCustomers(); buildCalendar(); renderDaily(); renderReports();
+
+      // Ayarlar
+      const set=store.data.settings||{appName:'MEYHANE',logoUrl:'',showTitle:true};
+      document.getElementById('setAppName').value=set.appName||''; document.getElementById('setLogoUrl').value=set.logoUrl||''; document.getElementById('setShowTitle').checked=!!set.showTitle;
+      document.getElementById('settingsForm').addEventListener('submit',(e)=>{ e.preventDefault(); const appName=document.getElementById('setAppName').value.trim(); const logoUrl=document.getElementById('setLogoUrl').value.trim(); const showTitle=document.getElementById('setShowTitle').checked; store.data.settings={appName,logoUrl,showTitle}; store.save(); applyBranding(); bootstrap.Modal.getInstance(document.getElementById('settingsModal')).hide(); showToast('Görsel ayarlar kaydedildi.'); });
+
+      // Müşteri form
+      document.getElementById('musteriForm').addEventListener('submit',(e)=>{ e.preventDefault(); const id=document.getElementById('musteriId').value||crypto.randomUUID(); const entry={ id, name:document.getElementById('mAd').value.trim(), phone:document.getElementById('mTel').value.trim(), performance:document.getElementById('mPerf').value }; const exists=store.data.customers.some(c=>c.id===id); if(exists){ store.data.customers=store.data.customers.map(c=> c.id===id? entry:c);} else { store.data.customers.push(entry);} store.save(); bootstrap.Modal.getInstance(document.getElementById('musteriModal')).hide(); document.getElementById('musteriForm').reset(); document.getElementById('musteriId').value=''; renderCustomers(); showToast('Müşteri kaydedildi.'); });
+
+      // Masa form
+      document.getElementById('masaForm').addEventListener('submit',(e)=>{ e.preventDefault(); const id=document.getElementById('masaId').value||crypto.randomUUID(); const entry={ id, no:Number(document.getElementById('msNo').value), capacity:Number(document.getElementById('msKap').value), location:document.getElementById('msKonum').value, feature:document.getElementById('msOzel').value.trim() }; const conflictNo=store.data.tables.find(t=> t.no===entry.no && t.id!==id); if(conflictNo){ return alert('Bu masa numarası zaten kayıtlı.'); } const exists=store.data.tables.some(t=>t.id===id); if(exists){ store.data.tables=store.data.tables.map(t=> t.id===id? entry:t);} else { store.data.tables.push(entry);} store.save(); bootstrap.Modal.getInstance(document.getElementById('masaModal')).hide(); document.getElementById('masaForm').reset(); document.getElementById('masaId').value=''; renderTables(); buildCalendar(); showToast('Masa kaydedildi.'); });
+
+      // Hızlı Rezervasyon
+      document.getElementById('rezForm').addEventListener('submit',(e)=>{ e.preventDefault(); const payload={ id:crypto.randomUUID(), date:document.getElementById('rezTarih').value, time:document.getElementById('rezSaat').value, end:document.getElementById('rezBitis').value.trim(), party:Number(document.getElementById('rezKisi').value), price:document.getElementById('rezUcret').value.trim(), customerId:document.getElementById('rezMusteri').value, tableId:document.getElementById('rezMasa').value, note:document.getElementById('rezNot').value.trim() }; if(!payload.end){ payload.end=minToHHMM(toMin(payload.time)+120);} if(conflict({id:payload.id,date:payload.date,start:payload.time,end:payload.end,tableId:payload.tableId})) return alert('Bu tarih ve saat aralığında bu masa zaten dolu.'); store.data.reservations.push(payload); store.save(); document.getElementById('rezForm').reset(); document.getElementById('rezTarih').value=payload.date; buildCalendar(); renderDaily(); renderReports(); renderCustomers(); showToast('Rezervasyon eklendi.'); });
+
+      // Günlük çizelge
+      document.getElementById('btnGunlukYenile').addEventListener('click', renderDaily);
+      document.getElementById('btnGunlukYazdir').addEventListener('click', ()=> window.print());
+
+      // Düzenle & Sil
+      document.getElementById('rezEditForm').addEventListener('submit',(e)=>{ e.preventDefault(); const id=document.getElementById('rezEditId').value; const payload={ id, date:document.getElementById('rezEditTarih').value, time:document.getElementById('rezEditSaat').value, end:document.getElementById('rezEditBitis').value.trim(), party:Number(document.getElementById('rezEditKisi').value), price:document.getElementById('rezEditUcret').value.trim(), customerId:document.getElementById('rezEditMusteri').value, tableId:document.getElementById('rezEditMasa').value, note:document.getElementById('rezEditNot').value.trim() }; if(!payload.end){ payload.end=minToHHMM(toMin(payload.time)+120);} if(conflict({id,date:payload.date,start:payload.time,end:payload.end,tableId:payload.tableId})) return alert('Bu tarih ve saat aralığında bu masa zaten dolu.'); store.data.reservations=store.data.reservations.map(r=> r.id===id? payload:r); store.save(); bootstrap.Modal.getInstance(document.getElementById('rezEditModal')).hide(); buildCalendar(); renderDaily(); renderReports(); renderCustomers(); showToast('Rezervasyon güncellendi.'); });
+      document.getElementById('rezSil').addEventListener('click', ()=>{ const id=document.getElementById('rezEditId').value; if(!confirm('Rezervasyon silinsin mi?')) return; store.data.reservations=store.data.reservations.filter(r=> r.id!==id); store.save(); bootstrap.Modal.getInstance(document.getElementById('rezEditModal')).hide(); buildCalendar(); renderDaily(); renderReports(); renderCustomers(); showToast('Rezervasyon silindi.'); });
+
+      // Haftalık rapor
+      document.getElementById('btnHaftaHesap').addEventListener('click', ()=> sumWeekly(document.getElementById('haftaBas').value||today));
+
+      // Export / Import
+      document.getElementById('btnExport').addEventListener('click', ()=> store.export());
+      document.getElementById('importJson').addEventListener('change', (e)=>{ if(e.target.files[0]) store.import(e.target.files[0]); });
+    });
+
+    // Ekran döndürmede görünüm uyumu
+    window.addEventListener('resize', ()=>{ clearTimeout(window.__rc); window.__rc=setTimeout(buildCalendar,200); });
+  </script>
+</body>
+</html>
