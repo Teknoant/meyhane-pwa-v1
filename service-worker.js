@@ -1,4 +1,4 @@
-const CACHE_NAME = 'meyhane-pwa-full-v1';
+const CACHE_NAME = 'meyhane-pwa-fix-v2'; // ÖNEMLİ: cache versiyonu artırıldı
 const URLS = [
   './index.html',
   './manifest.webmanifest',
